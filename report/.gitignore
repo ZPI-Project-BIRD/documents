@@ -20,3 +20,5 @@
 *.dvi
 *.ps
 *.xdv
+
+.DS_Store
