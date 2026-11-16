@@ -2,6 +2,7 @@
 %\documentclass[polish,edition=2025]{zpiday}
 
 \usepackage{lipsum}
+\usepackage{float}
 \title{Building Irregularity Recognition and Detection}
 \acronym{BIRD}
 \supervisor{dr hab. inż. Marek Krótkiewicz, prof. uczelni, Faculty of Information and Communication Technology, Wrocław University of Science and Technology}
@@ -26,99 +27,175 @@ This goal will be accomplished using a trained AI model that will analyze imager
 \section{Development}
 
 \subsection{Introduction}
-The most advanced part of the project is the development of a building footprint segmentation model. The model is trained to identify building footprints in aerial imagery, which can then be used to detect irregularities in official property records. The model is based on the SegFormer architecture and is trained using a combination of high-resolution RGB orthophotos and colour-infrared orthophotos obtained from the Polish Geoportal.\par
-The remaining components of the project include a web application for visualizing the results of the model and a backend service for processing the imagery and storing the results. The web application is built using modern web technologies and is designed to be user-friendly and accessible to both technical and non-technical users.\par
+The central development task was to create an automated building-detection
+pipeline that converts aerial imagery into building geometries. The pipeline
+combines a SegFormer-based semantic-segmentation model with geospatial
+post-processing and the project's data services. Its output can be compared
+with existing building records to support the detection of possible
+irregularities.
 
-\subsection{Building footprint segmentation model}
-The building footprint segmentation model was developed as a dedicated
-component for the analysis of aerial imagery. Its purpose is to
-classify every pixel of an orthophoto as either belonging to a building or to
-the background. This formulation was selected to provide a detailed
-description of building geometry, which can later be converted into vector
-objects and compared with existing spatial data.
+\subsection{System architecture}
+The detection workflow is implemented as a background service. A job
+orchestrator retrieves pending jobs from PostgreSQL, obtains source GeoTIFFs
+from object storage, and invokes the model loader and raster inference engine.
+The resulting probability map is converted into georeferenced building
+polygons by the geometry-processing stage, after which the exporter stores the
+results as spatial files and database records.
 
-\subsubsection{Training data preparation}
-\par
-The training data was prepared using official resources provided by the Polish
-Geoportal. Downloaded orthophotos for selected areas of interest were
-combined with building polygons from the BDOT10k dataset. The building
-polygons were rasterised into binary masks aligned with the corresponding
-orthophoto tiles. Two imagery sources were supported during dataset
-construction: high-resolution RGB orthophotos obtained through the Web
-Coverage Service (WCS) and colour-infrared orthophotos obtained from the
-Geoportal orthophoto index.\par
-The resulting data consists of image--mask pairs. The source tiles are divided
-into square crops of $512 \times 512$ pixels, which corresponds to the input
-size used during training. Instead of storing every crop as a separate image
-file, the preparation script creates CSV manifests. Each manifest entry
-contains the source image and mask paths together with the crop coordinates
-and dimensions. This approach reduces storage requirements while preserving
-the ability to load individual samples efficiently.\par
+\subsection{Model training}
+The training pipeline was developed specifically for the building-detection
+task because publicly available models performed less reliably in sparsely
+developed rural areas. Training data was collected from the Polish Geoportal
+and combined with building polygons from the BDOT10k dataset. The polygons
+were rasterised into binary masks aligned with the corresponding orthophoto
+tiles.
 
-The samples are divided into training, validation, and test subsets using
-geographic blocks. Consequently, neighbouring crops from the same geographic
-area are not distributed across different subsets, reducing the risk of
-overestimating model performance due to spatially correlated samples. The
-sampling procedure also includes positive, mixed, and background crops so that
-the model learns both building regions and difficult non-building regions.\par
-\begin{figure}[h]
+Figure~\ref{fig:training-examples} presents examples of the geographic and
+visual variation included in the training data. The examples contain
+industrial facilities, dense residential development, isolated buildings
+surrounded by agricultural land, and a more densely built urban environment.
+Including these different contexts helps the model distinguish building roofs
+from roads, vehicles, vegetation, shadows, and other non-building surfaces.
+
+\begin{figure}[H]
     \centering
-    \includegraphics[width=0.45\linewidth]{images/model/tile_029_006.jpg}
-    \includegraphics[width=0.45\linewidth]{images/model/tile_029_006.jpg}
-    \caption{Example of training data used for building footprint segmentation. The left image is an RGB orthophoto, while the right image is a binary mask derived from the BDOT10k building polygons.}
-    \label{fig:zpi-day}
+    \includegraphics[width=0.235\linewidth]{images/training/tile_003_036.png}
+    \includegraphics[width=0.235\linewidth]{images/training/tile_009_016.png}
+    \includegraphics[width=0.235\linewidth]{images/training/tile_023_007.png}
+    \includegraphics[width=0.235\linewidth]{images/training/tile_041_016.png}
+    \caption{Examples of aerial imagery included in the training dataset, showing industrial, residential, rural, and urban environments from left to right.}
+    \label{fig:training-examples}
 \end{figure}
 
-\subsubsection{Model architecture and training}
-The model is based on the SegFormer semantic-segmentation architecture. A
-pre-trained MiT encoder is used to extract features from the orthophotos and
-is combined with a binary segmentation head. The default configuration uses
-the NVIDIA MiT-B2 encoder; the training script allows another compatible
-encoder checkpoint to be selected when required by an experiment.\par
+The source tiles are divided into $512 \times 512$ pixel crops, matching the
+model input size. Crop locations are stored in CSV manifests rather than as
+separate image files. Each manifest entry identifies the source image and
+mask and records the crop coordinates. The training, validation, and test
+sets are assigned by geographic blocks, which limits the presence of
+neighbouring crops in multiple subsets. The crop sampler also includes
+positive, mixed, and background regions so that the model learns both
+building examples and difficult negative examples.
 
-During training, image and mask crops are loaded directly from the original
-tiles according to the manifest coordinates. Data augmentation is applied to
-the training subset and consists of horizontal and vertical flips, rotations
-by multiples of $90^\circ$, and moderate changes to brightness, contrast,
-colour saturation, and image noise. The same spatial transformation is
-applied to the image and its mask, while photometric transformations are
-applied only to the image. These operations increase the variability of the
-training data without changing the target building geometry.\par
+\subsubsection{Training procedure}
+The segmentation model is based on the SegFormer architecture
+\cite{xie2021segformer}. A pre-trained MiT encoder is combined with a binary
+segmentation head that assigns a building probability to every pixel. The
+training script supports different encoder sizes; the experiments described
+below compare B2, B3, a colour-infrared B3 variant, an extended B3 run, and
+B5.
 
-The optimisation objective combines binary cross-entropy with Dice loss. The
-first component penalises incorrect pixel-wise classifications, while the
-second improves the overlap between predicted and reference building regions.
-The model is optimised with AdamW and a cosine learning-rate schedule with a
-warm-up period. Gradient accumulation and mixed-precision execution are
-supported to reduce GPU memory usage and enable training on consumer-grade
-hardware.\par
+During training, the image and mask crops are loaded on demand from the
+original tiles. Spatial augmentation consists of horizontal and vertical
+flips and rotations by multiples of $90^\circ$. Moderate brightness, colour,
+and noise changes are applied to the image only. The same spatial
+transformation is applied to the image and its mask so that their alignment
+is preserved. The optimisation objective combines binary cross-entropy with
+Dice loss, and the model is trained with AdamW and a cosine learning-rate
+schedule. Gradient accumulation and mixed-precision execution reduce the
+memory required during training.
 
-\subsubsection{Evaluation and experiment outputs}
-After every training epoch, the model is evaluated on the validation subset.
-The evaluation records intersection over union (IoU), Dice coefficient,
-precision, and recall. The checkpoint with the highest validation IoU is
-stored as the best model. The latest checkpoint is saved separately so that
-training can be resumed after an interruption without discarding the
-optimizer and scheduler state.
+After each epoch, validation IoU, Dice coefficient, precision, and recall are
+recorded. The checkpoint with the highest validation IoU is retained as the
+best model, while a latest checkpoint preserves the state required to resume
+training. Figure~\ref{fig:experiment-comparison} compares the final
+validation metrics from the evaluated experiments. The B5 experiment
+achieved the highest validation IoU (83.4\%), Dice coefficient (91.0\%),
+precision (91.7\%), and recall (90.2\%). The B3 experiment trained for 50
+epochs was the second strongest configuration, while the shorter B2 and B3
+runs produced substantially lower IoU values.
 
-When a test manifest is available, the best checkpoint is evaluated on the
-test subset after training. The training process also stores the metric
-history, visual previews comparing predictions with reference masks, and
-sample training crops. These outputs support both quantitative comparison
-between experiments and qualitative inspection of typical model errors.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{images/model/training_charts/01_experiment_comparison.png}
+    \caption{Comparison of validation metrics obtained in the evaluated SegFormer training experiments.}
+    \label{fig:experiment-comparison}
+\end{figure}
 
+The B5 training run is examined in more detail in
+Figure~\ref{fig:b5-training-history}. Its validation metrics improve quickly
+at the beginning of training and then remain relatively stable. At the same
+time, the training loss decreases from approximately $0.3676$ to $0.0436$.
+Together, these curves indicate rapid initial learning followed by
+convergence.
 
-\subsection{Related Work}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\linewidth]{images/model/training_charts/02_b5_validation_history.png}
+    \includegraphics[width=0.92\linewidth]{images/model/training_charts/03_b5_training_loss.png}
+    \caption{Training history of the SegFormer-B5 experiment: validation metrics across epochs (top) and training loss (bottom).}
+    \label{fig:b5-training-history}
+\end{figure}
 
+\subsection{Inference input and building masks}
+After training, the selected model is applied to GeoTIFF images using
+overlapping $512 \times 512$ tiles. Figure~\ref{fig:input-orthophoto}
+illustrates an inference input containing detached houses, farm buildings,
+roads, vegetation, tree shadows, and open agricultural areas. This type of
+scene is particularly important for the project because the model must detect
+buildings outside dense urban areas.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.68\linewidth]{images/model/tile_029_006.jpg}
+    \caption{Example aerial orthophoto used as input for building-footprint segmentation.}
+    \label{fig:input-orthophoto}
+\end{figure}
+
+The overlapping predictions are blended into one probability raster. A
+configurable threshold converts the probability raster into a binary mask,
+where white pixels represent detected building regions and black pixels
+represent the background.
+
+Figure~\ref{fig:model-masks} shows masks produced for the same scene by the
+four stored model configurations. The masks retain the overall arrangement
+of the buildings visible in Figure~\ref{fig:input-orthophoto}, while their
+boundaries and smaller detections differ between configurations. The B5 mask
+contains the most complete set of detected regions in this example, which is
+consistent with its stronger validation results. These images represent an
+intermediate result: at this stage the output is still a raster mask and is
+not yet a spatial vector layer.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.235\linewidth]{images/model/model_comparison_results/segformer_b2_mask.png}
+    \includegraphics[width=0.235\linewidth]{images/model/model_comparison_results/segformer_b3_mask.png}
+    \includegraphics[width=0.235\linewidth]{images/model/model_comparison_results/segformer_b3_v2_mask.png}
+    \includegraphics[width=0.235\linewidth]{images/model/model_comparison_results/segformer_b5_mask.png}
+    \caption{Building masks predicted for the same orthophoto by the B2, B3, B3-v2, and B5 model configurations, from left to right. White pixels denote predicted building regions.}
+    \label{fig:model-masks}
+\end{figure}
 
 \subsection{Results}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.58\linewidth]{images/model/AfterPolygonazation.png}
+    \caption{Example of the post-processing result. Building regions are converted into rectangularised, georeferenced footprints and overlaid on the source orthophoto.}
+    \label{fig:polygonisation}
+\end{figure}
+
+The final stage converts the binary mask into georeferenced building
+geometries. Connected components are extracted from the mask, small regions
+and small holes are filtered, and the remaining polygons are simplified.
+Depending on the selected geometry mode, the pipeline either regularises the
+polygon boundaries or decomposes irregular buildings into a small number of
+rectangular parts. The resulting geometries retain the source coordinate
+reference system and can therefore be exported for use in subsequent spatial
+analysis.
+
+Figure~\ref{fig:polygonisation} illustrates the output of this stage. The
+detected building regions are shown as semi-transparent red areas with red
+outlines over the original orthophoto. This representation makes the final
+transition from pixel-level prediction to building-level objects explicit.
+The rectangular approximation is useful for producing regularised footprints,
+although it can simplify complex or highly irregular buildings. The
+geometries are then available to the result exporter and can be persisted in
+the database or written to GeoJSON and GeoPackage files.
+
 \section{Conclusion}
 
 \subsection{Conclusions}
 
 \subsection{Future Directions}
-
-\subsection{Acknowledgments}
 
 \subsection{References}
 
