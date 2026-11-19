@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @font-face{font-family:'InterP';src:url('/home/claude/poster/fonts/Inter-SemiBold.ttf');font-weight:600}
+  @font-face{font-family:'InterP';src:url('/home/claude/poster/fonts/Inter-Bold.ttf');font-weight:700}
+  @font-face{font-family:'InterP';src:url('/home/claude/poster/fonts/Inter-ExtraBold.ttf');font-weight:800}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:1800px;height:700px;background:#fff;font-family:'InterP',Arial,sans-serif;padding:22px 24px 16px}
+  .grid{display:grid;grid-template-columns:150px repeat(5,1fr);grid-template-rows:38px repeat(4,1fr);gap:8px;height:612px}
+  .wk{background:#0F1B2D;color:#fff;font-weight:800;font-size:16px;letter-spacing:1px;display:flex;align-items:center;justify-content:center;border-radius:4px}
+  .wk.hl{background:#0F1B2D;box-shadow:inset 0 -4px 0 #F2A900}
+  .lane{color:#fff;font-weight:800;font-size:15px;line-height:1.25;text-align:center;display:flex;align-items:center;justify-content:center;border-radius:4px;padding:6px}
+  .fe{background:#3E9A8E}.be{background:#3F72C4}.ai{background:#D04A43}.doc{background:#7B5CC9}
+  .cells{display:flex;flex-direction:column;gap:6px}
+  .c{flex:1;border:2px dashed;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+     font-weight:700;font-size:13.5px;line-height:1.25;padding:4px 8px;text-transform:uppercase;letter-spacing:.3px;position:relative}
+  .fe-c{background:#E3F4F1;border-color:#9ED3CA;color:#1F5A52}
+  .be-c{background:#E3ECFA;border-color:#A9C2EA;color:#1F3F78}
+  .ai-c{background:#FBE5E3;border-color:#EDAAA4;color:#7A231E}
+  .doc-c{background:#EEE8FA;border-color:#C5B6EC;color:#43307F}
+  .c small{display:block;text-transform:none;font-weight:600;font-size:12px;letter-spacing:0;margin-top:2px;opacity:.85}
+  .step{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#F2A900;color:#0F1B2D;font-size:13px;font-weight:800;margin-right:6px;flex:none}
+  .new{outline:3px solid #F2A900;outline-offset:-1px}
+  .span2{grid-column:span 2}.span3{grid-column:span 3}
+  .row{display:contents}
+  .legend{margin-top:10px;font-size:13px;color:#43505E;font-weight:600;display:flex;gap:26px}
+  .legend b{color:#0F1B2D}
+</style></head><body>
+<div class="grid">
+  <div></div>
+  <div class="wk">WEEK 1–2</div><div class="wk">WEEK 3–4</div><div class="wk">WEEK 5–6</div><div class="wk">WEEK 7–8</div><div class="wk hl">WEEK 9–10</div>
+
+  <!-- FRONTEND -->
+  <div class="lane fe">WEB<br>APPLICATION<br>(FRONTEND)</div>
+  <div class="cells"><div class="c fe-c">UI/UX design &amp; tech stack selection</div><div class="c fe-c">Client application boilerplate</div></div>
+  <div class="cells"><div class="c fe-c">Area of interest selection view</div><div class="c fe-c">Detection results visualization</div></div>
+  <div class="cells"><div class="c fe-c new">Detection review &amp; correction module<small>verify, edit, add or remove footprints → verified dataset</small></div><div class="c fe-c">Project management dashboard</div></div>
+  <div class="cells"><div class="c fe-c">UX audit &amp; design consistency</div><div class="c fe-c">Backend API integration</div></div>
+  <div class="cells"><div class="c fe-c"><span style="display:flex;align-items:center"><span class="step">2</span>User acceptance testing (UAT)</span></div><div class="c fe-c"><span style="display:flex;align-items:center"><span class="step">3</span>Post-UAT fixes</span></div></div>
+
+  <!-- BACKEND -->
+  <div class="lane be">SERVER<br>APPLICATION<br>(BACKEND)</div>
+  <div class="cells"><div class="c be-c">Architecture &amp; Geoportal microservice</div><div class="c be-c">Task orchestration (AWS SQS)</div></div>
+  <div class="cells"><div class="c be-c">Project &amp; task management API</div><div class="c be-c">RBAC authorization &amp; organizations</div></div>
+  <div class="cells"><div class="c be-c">Monitoring &amp; metrics reporting</div><div class="c be-c">Query optimization &amp; caching</div></div>
+  <div class="cells"><div class="c be-c">Microservices integration testing</div><div class="c be-c">Frontend API contract validation</div></div>
+  <div class="cells"><div class="c be-c"><span style="display:flex;align-items:center"><span class="step">1</span>Demo environment deployment</span></div><div class="c be-c">Security audit &amp; system logging</div></div>
+
+  <!-- AI -->
+  <div class="lane ai">AI &amp; COMPUTER<br>VISION<br>MODULE</div>
+  <div style="grid-column:span 5;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:1fr 1fr;gap:6px 8px">
+    <div class="c ai-c">Orthophotomap acquisition &amp; cleaning</div>
+    <div class="c ai-c" style="grid-column:span 2">Baseline models training &amp; evaluation</div>
+    <div class="c ai-c">Inference latency optimization<small>&lt;30 s per area of interest</small></div>
+    <div class="c ai-c">Detection threshold calibration</div>
+    <div class="c ai-c">Dataset annotation &amp; splitting</div>
+    <div class="c ai-c">Image types &amp; resolution benchmarking</div>
+    <div class="c ai-c" style="grid-column:span 2">Mask polygonization &amp; inference pipeline</div>
+    <div class="c ai-c">E2E model testing on unseen data<small>Dice ≥ 0.90 on held-out test split</small></div>
+  </div>
+
+  <!-- DOCS -->
+  <div class="lane doc">DOCUMENTATION</div>
+  <div class="cells"><div class="c doc-c">Project charter &amp; repository setup</div></div>
+  <div class="cells span3" style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+    <div class="c doc-c">Technical documentation &amp; API architecture</div>
+    <div class="c doc-c">ZPI-Day poster &amp; presentation</div>
+  </div>
+  <div class="cells"><div class="c doc-c">Final software &amp; documentation handover</div></div>
+</div>
+<div class="legend">
+  <span><span class="step">1</span><span class="step">2</span><span class="step">3</span><b>Week 9–10 order:</b> deploy the demo environment → run UAT on it → fix issues found in UAT</span>
+  <span><b style="color:#B37D00">▢ Highlighted:</b> the review &amp; correction module turns model detections into a human-verified set of building footprints</span>
+</div>
+</body></html>
